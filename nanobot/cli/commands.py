@@ -835,6 +835,93 @@ def cron_run(
 
 
 # ============================================================================
+# Web Frontend
+# ============================================================================
+
+
+@app.command()
+def web(
+    port: int = typer.Option(18800, "--port", "-p", help="Web server port"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Web server host"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+):
+    """Start the web frontend with built-in API server."""
+    from nanobot.config.loader import load_config
+    from nanobot.bus.queue import MessageBus
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.session.manager import SessionManager
+    from nanobot.web.api import WebAPIHandler
+    from http.server import HTTPServer
+    from loguru import logger
+    import threading
+
+    if verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+
+    logger.enable("nanobot")
+
+    config = load_config()
+    bus = MessageBus()
+    provider = _make_provider(config)
+    session_manager = SessionManager(config.workspace_path)
+
+    agent_loop = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        temperature=config.agents.defaults.temperature,
+        max_tokens=config.agents.defaults.max_tokens,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        memory_window=config.agents.defaults.memory_window,
+        brave_api_key=config.tools.web.search.api_key or None,
+        exec_config=config.tools.exec,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        session_manager=session_manager,
+        mcp_servers=config.tools.mcp_servers,
+    )
+
+    # Resolve static dir: check for frontend/dist relative to project root
+    static_dir = str(Path(__file__).parent.parent.parent / "frontend" / "dist")
+    if not Path(static_dir).is_dir():
+        # Fallback: check next to nanobot package
+        static_dir = str(Path(__file__).parent.parent / "frontend" / "dist")
+
+    # Run the async event loop in a background thread
+    loop = asyncio.new_event_loop()
+
+    async def _init_agent():
+        await agent_loop._connect_mcp()
+
+    def _run_loop():
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_init_agent())
+        loop.run_forever()
+
+    bg_thread = threading.Thread(target=_run_loop, daemon=True)
+    bg_thread.start()
+
+    # Configure the handler class with shared state
+    WebAPIHandler.agent_loop = agent_loop
+    WebAPIHandler.session_manager = session_manager
+    WebAPIHandler.static_dir = static_dir
+    WebAPIHandler.event_loop = loop
+
+    server = HTTPServer((host, port), WebAPIHandler)
+    console.print(f"{__logo__} Web frontend running at http://{host}:{port}")
+    console.print(f"  Static files: {static_dir}")
+    console.print(f"  Press Ctrl+C to stop\n")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\nShutting down web server...")
+        server.shutdown()
+        loop.call_soon_threadsafe(loop.stop)
+
+
+# ============================================================================
 # Status Commands
 # ============================================================================
 

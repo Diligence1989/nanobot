@@ -1,0 +1,12 @@
+{
+  "name": "nanobot-frontend",
+  "version": "1.0.0",
+  "description": "Web frontend for nanobot",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
