@@ -4,28 +4,28 @@ Information about the user to help personalize interactions.
 
 ## Basic Information
 
-- **Name**: (your name)
-- **Timezone**: (your timezone, e.g., UTC+8)
-- **Language**: (preferred language)
+- **Name**: diligence
+- **Timezone**: UTC+8
+- **Language**: Chinese first,English accpted
 
 ## Preferences
 
 ### Communication Style
 
 - [ ] Casual
-- [ ] Professional
-- [ ] Technical
+- [X] Professional
+- [X] Technical
 
 ### Response Length
 
 - [ ] Brief and concise
-- [ ] Detailed explanations
+- [X] Detailed explanations
 - [ ] Adaptive based on question
 
 ### Technical Level
 
 - [ ] Beginner
-- [ ] Intermediate
+- [X] Intermediate
 - [ ] Expert
 
 ## Work Context
