@@ -24,6 +24,9 @@ from nanobot.session.manager import SessionManager, Session
 from nanobot.agent.loop import AgentLoop
 from nanobot.utils.helpers import safe_filename
 
+# Built-in skills directory (read-only, cannot be modified or deleted)
+BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+
 
 def make_session_key(username: str, session_name: str) -> str:
     """Build a human-readable session key like 'web-alice-general'."""
@@ -108,6 +111,10 @@ class WebAPIHandler(BaseHTTPRequestHandler):
             self._handle_get_history(qs)
         elif path == "/api/health":
             self._send_json({"status": "ok"})
+        elif path == "/api/skills":
+            self._handle_list_skills()
+        elif path == "/api/skills/get":
+            self._handle_get_skill(qs)
         else:
             self._serve_static(path)
 
@@ -123,6 +130,12 @@ class WebAPIHandler(BaseHTTPRequestHandler):
             self._handle_delete_session()
         elif path == "/api/log":
             self._handle_frontend_log()
+        elif path == "/api/skills/create":
+            self._handle_create_skill()
+        elif path == "/api/skills/update":
+            self._handle_update_skill()
+        elif path == "/api/skills/delete":
+            self._handle_delete_skill()
         else:
             self._send_error(404, "Not found")
 
@@ -278,6 +291,148 @@ class WebAPIHandler(BaseHTTPRequestHandler):
                 logger.info(log_msg)
 
         self._send_json({"ok": True})
+
+    # ------------------------------------------------------------------
+    # Skills API handlers
+    # ------------------------------------------------------------------
+
+    def _handle_list_skills(self) -> None:
+        """GET /api/skills — list all skills."""
+        skills = []
+
+        if BUILTIN_SKILLS_DIR.exists():
+            for skill_dir in sorted(BUILTIN_SKILLS_DIR.iterdir()):
+                if skill_dir.is_dir():
+                    skill_file = skill_dir / "SKILL.md"
+                    if skill_file.exists():
+                        meta = self._parse_skill_frontmatter(skill_file)
+                        skills.append({
+                            "name": skill_dir.name,
+                            "description": meta.get("description", ""),
+                            "source": "local",
+                            "readonly": False,
+                        })
+
+        logger.info(f"[web] List skills: {len(skills)} total")
+        self._send_json({"skills": skills})
+
+    def _handle_get_skill(self, qs: dict) -> None:
+        """GET /api/skills/get?name=weather — get skill content."""
+        name_list = qs.get("name", [])
+        if not name_list or not name_list[0]:
+            self._send_error(400, "name is required")
+            return
+
+        name = name_list[0]
+        skill_file = BUILTIN_SKILLS_DIR / name / "SKILL.md"
+        if not skill_file.exists():
+            self._send_error(404, f"Skill '{name}' not found")
+            return
+
+        content = skill_file.read_text(encoding="utf-8")
+        logger.info(f"[web] Get skill: name={name}")
+        self._send_json({
+            "name": name,
+            "content": content,
+            "source": "local",
+            "readonly": False,
+        })
+
+    def _handle_create_skill(self) -> None:
+        """POST /api/skills/create — create a new skill."""
+        body = self._parse_json_body()
+        if not body:
+            self._send_error(400, "Invalid JSON body")
+            return
+
+        name = body.get("name", "").strip()
+        content = body.get("content", "").strip()
+
+        if not name or not content:
+            self._send_error(400, "name and content are required")
+            return
+
+        if not re.match(r"^[a-z0-9][a-z0-9-]*$", name):
+            self._send_error(400, "Skill name must be lowercase letters, digits, and hyphens only")
+            return
+
+        skill_dir = BUILTIN_SKILLS_DIR / name
+        if skill_dir.exists() and (skill_dir / "SKILL.md").exists():
+            self._send_error(409, f"Skill '{name}' already exists")
+            return
+
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
+
+        logger.info(f"[web] Created skill: {name}")
+        self._send_json({"ok": True, "name": name})
+
+    def _handle_update_skill(self) -> None:
+        """POST /api/skills/update — update a skill's content."""
+        body = self._parse_json_body()
+        if not body:
+            self._send_error(400, "Invalid JSON body")
+            return
+
+        name = body.get("name", "").strip()
+        content = body.get("content", "").strip()
+
+        if not name or not content:
+            self._send_error(400, "name and content are required")
+            return
+
+        skill_file = BUILTIN_SKILLS_DIR / name / "SKILL.md"
+        if not skill_file.exists():
+            self._send_error(404, f"Skill '{name}' not found")
+            return
+
+        skill_file.write_text(content, encoding="utf-8")
+        logger.info(f"[web] Updated skill: {name}")
+        self._send_json({"ok": True, "name": name})
+
+    def _handle_delete_skill(self) -> None:
+        """POST /api/skills/delete — delete a skill."""
+        body = self._parse_json_body()
+        if not body:
+            self._send_error(400, "Invalid JSON body")
+            return
+
+        name = body.get("name", "").strip()
+        if not name:
+            self._send_error(400, "name is required")
+            return
+
+        skill_dir = BUILTIN_SKILLS_DIR / name
+        if not skill_dir.exists():
+            self._send_error(404, f"Skill '{name}' not found")
+            return
+
+        import shutil
+        shutil.rmtree(skill_dir)
+        logger.info(f"[web] Deleted skill: {name}")
+        self._send_json({"ok": True})
+
+    def _parse_skill_frontmatter(self, path: Path) -> dict:
+        """Parse YAML frontmatter from a SKILL.md file."""
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            return {}
+
+        if not text.startswith("---"):
+            return {}
+
+        import re as _re
+        match = _re.match(r"^---\n(.*?)\n---", text, _re.DOTALL)
+        if not match:
+            return {}
+
+        metadata = {}
+        for line in match.group(1).split("\n"):
+            if ":" in line:
+                key, value = line.split(":", 1)
+                metadata[key.strip()] = value.strip().strip("\"'")
+        return metadata
 
     # ------------------------------------------------------------------
     # Static file serving

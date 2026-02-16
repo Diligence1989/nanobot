@@ -96,3 +96,41 @@ export async function healthCheck(): Promise<boolean> {
         return false;
     }
 }
+
+// ---- Skills API ----
+
+export interface SkillInfo {
+    name: string;
+    description: string;
+    source: string;
+    readonly: boolean;
+}
+
+export interface SkillDetail {
+    name: string;
+    content: string;
+    source: string;
+    readonly: boolean;
+}
+
+export async function listSkills(): Promise<SkillInfo[]> {
+    var data = await request("GET", "/api/skills") as Record<string, unknown>;
+    return (data.skills || []) as SkillInfo[];
+}
+
+export async function getSkill(name: string): Promise<SkillDetail> {
+    var data = await request("GET", "/api/skills/get?name=" + encodeURIComponent(name));
+    return data as SkillDetail;
+}
+
+export async function createSkill(name: string, content: string): Promise<void> {
+    await request("POST", "/api/skills/create", { name: name, content: content });
+}
+
+export async function updateSkill(name: string, content: string): Promise<void> {
+    await request("POST", "/api/skills/update", { name: name, content: content });
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+    await request("POST", "/api/skills/delete", { name: name });
+}
