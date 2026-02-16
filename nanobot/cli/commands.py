@@ -851,15 +851,11 @@ def web(
     from nanobot.agent.loop import AgentLoop
     from nanobot.session.manager import SessionManager
     from nanobot.web.api import WebAPIHandler
+    from nanobot.logging import setup_logging
     from http.server import HTTPServer
-    from loguru import logger
     import threading
 
-    if verbose:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
-
-    logger.enable("nanobot")
+    setup_logging(verbose=verbose)
 
     config = load_config()
     bus = MessageBus()

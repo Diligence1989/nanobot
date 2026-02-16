@@ -121,6 +121,8 @@ class WebAPIHandler(BaseHTTPRequestHandler):
             self._handle_create_session()
         elif path == "/api/sessions/delete":
             self._handle_delete_session()
+        elif path == "/api/log":
+            self._handle_frontend_log()
         else:
             self._send_error(404, "Not found")
 
@@ -250,6 +252,31 @@ class WebAPIHandler(BaseHTTPRequestHandler):
         self.session_manager.invalidate(session_key)
 
         logger.info(f"[web] Deleted session: {session_key}")
+        self._send_json({"ok": True})
+
+    def _handle_frontend_log(self) -> None:
+        """POST /api/log — receive log entries from the frontend."""
+        body = self._parse_json_body()
+        if not body:
+            self._send_json({"ok": True})
+            return
+
+        entries = body.get("entries", [])
+        for entry in entries:
+            level = entry.get("level", "info").lower()
+            tag = entry.get("tag", "frontend")
+            message = entry.get("message", "")
+            log_msg = f"[frontend:{tag}] {message}"
+
+            if level == "debug":
+                logger.debug(log_msg)
+            elif level == "warn":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.info(log_msg)
+
         self._send_json({"ok": True})
 
     # ------------------------------------------------------------------

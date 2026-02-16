@@ -21,6 +21,7 @@ var sendButton: HTMLButtonElement;
 var activeSessionLabel: HTMLElement;
 var statusIndicator: HTMLElement;
 var deleteSessionButton: HTMLButtonElement;
+var userAvatar: HTMLElement;
 
 export function initElements(): void {
     loginScreen = getEl("login-screen");
@@ -38,6 +39,7 @@ export function initElements(): void {
     activeSessionLabel = getEl("active-session");
     statusIndicator = getEl("status");
     deleteSessionButton = getEl("delete-session-button") as HTMLButtonElement;
+    userAvatar = getEl("user-avatar");
     logger.info("ui", "DOM elements initialized");
 }
 
@@ -61,6 +63,7 @@ export function showChat(username: string): void {
     loginScreen.style.display = "none";
     chatScreen.style.display = "flex";
     currentUserLabel.textContent = username;
+    userAvatar.textContent = username.charAt(0).toUpperCase();
     messageInput.focus();
 }
 
