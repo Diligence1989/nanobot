@@ -19,6 +19,7 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 
 from loguru import logger
+import uuid
 
 from nanobot.session.manager import SessionManager, Session
 from nanobot.agent.loop import AgentLoop
@@ -26,6 +27,9 @@ from nanobot.utils.helpers import safe_filename
 
 # Built-in skills directory (read-only, cannot be modified or deleted)
 BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+
+# In-memory storage for HTML preview content
+_preview_store: dict[str, str] = {}
 
 
 def make_session_key(username: str, session_name: str) -> str:
@@ -115,6 +119,8 @@ class WebAPIHandler(BaseHTTPRequestHandler):
             self._handle_list_skills()
         elif path == "/api/skills/get":
             self._handle_get_skill(qs)
+        elif path.startswith("/api/preview/"):
+            self._handle_serve_preview(path)
         else:
             self._serve_static(path)
 
@@ -136,6 +142,8 @@ class WebAPIHandler(BaseHTTPRequestHandler):
             self._handle_update_skill()
         elif path == "/api/skills/delete":
             self._handle_delete_skill()
+        elif path == "/api/preview":
+            self._handle_store_preview()
         else:
             self._send_error(404, "Not found")
 
@@ -433,6 +441,38 @@ class WebAPIHandler(BaseHTTPRequestHandler):
                 key, value = line.split(":", 1)
                 metadata[key.strip()] = value.strip().strip("\"'")
         return metadata
+
+    def _handle_store_preview(self) -> None:
+        """Store HTML content for preview and return an ID."""
+        body = self._parse_json_body()
+        if not body or "html" not in body:
+            self._send_error(400, "Missing 'html' field")
+            return
+
+        preview_id = uuid.uuid4().hex[:12]
+        _preview_store[preview_id] = body["html"]
+        self._send_json({"id": preview_id})
+
+    def _handle_serve_preview(self, path: str) -> None:
+        """Serve stored HTML content as a full page."""
+        # path is like /api/preview/<id>
+        preview_id = path.split("/")[-1]
+        html = _preview_store.get(preview_id)
+        if not html:
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"Preview not found")
+            return
+
+        encoded = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(encoded)
+
 
     # ------------------------------------------------------------------
     # Static file serving

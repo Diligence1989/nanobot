@@ -3,7 +3,7 @@
  */
 
 import * as logger from "./logger.js";
-import { renderMarkdown, attachHtmlPreviews } from "./render.js";
+import { renderMarkdownWithBlocks, attachHtmlPreviews } from "./render.js";
 
 // ---- DOM element references ----
 
@@ -177,14 +177,15 @@ export function addMessage(role: string, content: string, ts?: string): void {
 
     var body = document.createElement("div");
     body.className = "message-body";
-    body.innerHTML = renderMarkdown(content);
+    var rendered = renderMarkdownWithBlocks(content);
+    body.innerHTML = rendered.html;
 
     div.appendChild(header);
     div.appendChild(body);
     messagesContainer.appendChild(div);
 
     // Attach preview buttons to HTML code blocks
-    attachHtmlPreviews(body);
+    attachHtmlPreviews(body, rendered.blocks);
 
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
