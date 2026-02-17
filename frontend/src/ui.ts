@@ -38,6 +38,11 @@ var skillSaveButton: HTMLButtonElement;
 var skillCancelButton: HTMLButtonElement;
 var skillSourceBadge: HTMLElement;
 
+// Mobile sidebar elements
+var sidebarEl: HTMLElement;
+var sidebarOverlay: HTMLElement;
+var sidebarToggle: HTMLButtonElement;
+
 export function initElements(): void {
     loginScreen = getEl("login-screen");
     chatScreen = getEl("chat-screen");
@@ -70,6 +75,20 @@ export function initElements(): void {
     skillCancelButton = getEl("skill-cancel-button") as HTMLButtonElement;
     skillSourceBadge = getEl("skill-source-badge");
 
+    // Mobile sidebar
+    sidebarEl = getEl("sidebar");
+    sidebarOverlay = getEl("sidebar-overlay");
+    sidebarToggle = getEl("sidebar-toggle") as HTMLButtonElement;
+
+    // Sidebar toggle events
+    sidebarToggle.addEventListener("click", function () {
+        sidebarEl.classList.add("open");
+        sidebarOverlay.classList.add("visible");
+    });
+    sidebarOverlay.addEventListener("click", function () {
+        closeSidebar();
+    });
+
     logger.info("ui", "DOM elements initialized");
 }
 
@@ -82,6 +101,11 @@ function getEl(id: string): HTMLElement {
 }
 
 // ---- Screen switching ----
+
+export function closeSidebar(): void {
+    sidebarEl.classList.remove("open");
+    sidebarOverlay.classList.remove("visible");
+}
 
 export function showLogin(): void {
     loginScreen.style.display = "flex";
@@ -119,6 +143,7 @@ export function renderSessionList(sessions: SessionItem[], onClick: (key: string
         (function (key: string, name: string) {
             li.addEventListener("click", function () {
                 onClick(key, name);
+                closeSidebar();
             });
         })(s.key, s.name);
         sessionList.appendChild(li);
